@@ -20,23 +20,23 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Locate or unpack Android project
-        id: locate
+      - name: Unpack ZIP into repo root & remove archive
+        id: unpack
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             CHANGED_ZIPS=$(git diff-tree --no-commit-id --name-only -r --root --diff-filter=AM "${{ github.sha }}" | grep -iE '\.zip$' || true)
             if [ -z "$CHANGED_ZIPS" ]; then
-              echo "No added or modified .zip files in this commit (likely a .zip deletion). Skipping APK build."
+              echo "No added or modified .zip files in this commit. Skipping build."
               echo "should_build=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "Detected added/modified .zip file(s):"
+            echo "Detected uploaded .zip archive(s):"
             echo "$CHANGED_ZIPS"
           fi
 
           LATEST_ZIP=$(python3 - <<'PY'
-          import os, re
+          import re
           from pathlib import Path
 
           zips = []
@@ -66,63 +66,99 @@ jobs:
           PY
           )
 
-          if [ -z "$LATEST_ZIP" ]; then
-            echo "::error::No .zip archive found in repository root or uploads/."
-            ls -la
+          if [ -n "$LATEST_ZIP" ]; then
+            echo "Unpacking $LATEST_ZIP into repository root..."
+            rm -rf _unpack_tmp
+            mkdir -p _unpack_tmp
+            unzip -oq "$LATEST_ZIP" -d _unpack_tmp
+
+            SETTINGS_FILE=$(find _unpack_tmp -maxdepth 4 -type f \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -n 1)
+            if [ -z "$SETTINGS_FILE" ]; then
+              echo "::error::Could not find settings.gradle.kts inside $LATEST_ZIP."
+              exit 1
+            fi
+
+            SRC_ROOT=$(dirname "$SETTINGS_FILE")
+
+            # Remove previous unpacked project files cleanly while preserving .git, .github, and any root keystore
+            rm -rf app gradle build.gradle build.gradle.kts settings.gradle settings.gradle.kts gradle.properties gradlew gradlew.bat RELEASE_NOTES.md
+
+            # Copy all unpacked project files into repository root, excluding .github (GITHUB_TOKEN cannot push workflow edits)
+            python3 - "$SRC_ROOT" <<'PY'
+          import shutil, sys
+          from pathlib import Path
+
+          src_root = Path(sys.argv[1])
+          dst_root = Path('.')
+          for item in src_root.iterdir():
+              if item.name in {'.git', '.github', '__MACOSX'}:
+                  continue
+              target = dst_root / item.name
+              if item.is_dir():
+                  if target.exists():
+                      shutil.rmtree(target)
+                  shutil.copytree(item, target)
+              else:
+                  shutil.copy2(item, target)
+          PY
+
+            rm -rf _unpack_tmp
+
+            # Preserve persistent repo-root keystore if present
+            if [ -f "./deckvault.jks" ]; then
+              cp "./deckvault.jks" "./app/deckvault.jks"
+            fi
+
+            # Delete uploaded .zip archive(s) from root and uploads/
+            find . -maxdepth 2 -type f -name '*.zip' -not -path './.git/*' -delete
+
+            # Commit unpacked source files and .zip deletion back to branch
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            if ! git diff --cached --quiet; then
+              VER_TAG=$(grep -Eo 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' app/build.gradle.kts | head -n 1 | cut -d'"' -f2 || echo "update")
+              git commit -m "Unpack DeckVault v${VER_TAG} & remove archive [skip ci]"
+              git push
+              echo "Pushed unpacked files and removed .zip from repository."
+            fi
+          elif [ ! -f "settings.gradle.kts" ] && [ ! -f "settings.gradle" ]; then
+            echo "::error::No .zip archive or Gradle project found in repository root."
             exit 1
           fi
 
-          echo "Unpacking latest ZIP archive (SemVer): $LATEST_ZIP"
-          rm -rf _build_src
-          mkdir -p _build_src
-          unzip -oq "$LATEST_ZIP" -d _build_src
-          SETTINGS_FILE=$(find _build_src -maxdepth 4 -type f \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -n 1)
-
-          if [ -z "$SETTINGS_FILE" ]; then
-            echo "::error::Could not find settings.gradle.kts inside $LATEST_ZIP."
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
-          if [ -f "./deckvault.jks" ]; then
-            echo "Using persistent repo-root deckvault.jks"
-            cp "./deckvault.jks" "$PROJECT_DIR/app/deckvault.jks"
-          fi
-
-          VERSION_NAME=$(grep -Eo 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' "$PROJECT_DIR/app/build.gradle.kts" | head -n 1 | cut -d'"' -f2)
+          VERSION_NAME=$(grep -Eo 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' app/build.gradle.kts | head -n 1 | cut -d'"' -f2)
           if [ -z "$VERSION_NAME" ]; then
             VERSION_NAME="unknown"
           fi
 
-          echo "Using Gradle project root: $PROJECT_DIR (version: $VERSION_NAME)"
+          echo "Ready to build version: $VERSION_NAME"
           echo "should_build=true" >> "$GITHUB_OUTPUT"
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
-        if: steps.locate.outputs.should_build == 'true'
+        if: steps.unpack.outputs.should_build == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Set up Gradle
-        if: steps.locate.outputs.should_build == 'true'
+        if: steps.unpack.outputs.should_build == 'true'
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
       - name: Build Debug APK
-        if: steps.locate.outputs.should_build == 'true'
-        working-directory: ${{ steps.locate.outputs.project_dir }}
+        if: steps.unpack.outputs.should_build == 'true'
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Generate APK SHA-256 Checksum
         id: pkg
-        if: steps.locate.outputs.should_build == 'true'
+        if: steps.unpack.outputs.should_build == 'true'
         shell: bash
         run: |
-          APK_DIR="${{ steps.locate.outputs.project_dir }}/app/build/outputs/apk/debug"
+          APK_DIR="app/build/outputs/apk/debug"
           APK_FILE=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1)
           if [ -z "$APK_FILE" ]; then
             echo "::error::No APK found in $APK_DIR"
@@ -134,10 +170,10 @@ jobs:
           cat "${APK_FILE}.sha256"
 
       - name: Upload APK artifact
-        if: steps.locate.outputs.should_build == 'true'
+        if: steps.unpack.outputs.should_build == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: DeckVault-v${{ steps.locate.outputs.version_name }}-apk
+          name: DeckVault-v${{ steps.unpack.outputs.version_name }}-apk
           path: |
             ${{ steps.pkg.outputs.apk_path }}
             ${{ steps.pkg.outputs.sha_path }}
@@ -145,18 +181,17 @@ jobs:
           retention-days: 30
 
       - name: Publish GitHub Release
-        if: steps.locate.outputs.should_build == 'true'
+        if: steps.unpack.outputs.should_build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          VERSION="${{ steps.locate.outputs.version_name }}"
+          VERSION="${{ steps.unpack.outputs.version_name }}"
           TAG="v${VERSION}"
-          PROJECT_DIR="${{ steps.locate.outputs.project_dir }}"
           APK_PATH="${{ steps.pkg.outputs.apk_path }}"
           SHA_PATH="${{ steps.pkg.outputs.sha_path }}"
 
-          NOTES_FILE="$PROJECT_DIR/RELEASE_NOTES.md"
+          NOTES_FILE="RELEASE_NOTES.md"
           if [ ! -f "$NOTES_FILE" ]; then
             NOTES_FILE="_generated_notes.md"
             printf "### DeckVault %s\n\nAutomated APK build for version %s.\n" "$TAG" "$VERSION" > "$NOTES_FILE"
