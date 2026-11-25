@@ -1,9 +1,6 @@
-### DeckVault v1.1.1-beta.2 (Beta Pre-Release)
+### DeckVault v1.1.1
 
-> **Beta Testing Build:** Official users on `v1.1.0` stay on the stable release unless they opt into **Enable Beta / Pre-release updates** under **Settings**.
-
-#### What's Changed (Play Protect Hardening)
-- **Signed Release APK (`assembleRelease`):** Switched GitHub Actions builds from `debug` (`android:debuggable="true"`) to signed `release` builds using the same persistent signing key for clean in-place updates.
-- **Removed High-Risk Heuristic Permissions:** Removed `REQUEST_INSTALL_PACKAGES` and `RECEIVE_BOOT_COMPLETED` / boot receiver. DeckVault still checks GitHub Releases on launch and in **Settings**, and hands off APK downloads cleanly to your browser.
-- **Tightened Network & WebView Security:** Scoped cleartext HTTP strictly to `127.0.0.1` and `localhost` (`base-config cleartextTrafficPermitted="false"`), disabled `WebView` `allowFileAccess`, and enforced `MIXED_CONTENT_NEVER_ALLOW`.
-- **Fixed Release Compilation:** Fixed string escaping in `MainActivity.kt`.
+#### What's Improved
+- **Signed Release APK Builds:** Switched builds from `debug` (`android:debuggable="true"`) to signed `release` APKs (`DeckVault-v1.1.1-release.apk`) using the same persistent signing key for seamless in-place updates without losing saved decks.
+- **Play Protect & Security Hardening:** Removed `REQUEST_INSTALL_PACKAGES` and boot-receiver permissions, scoped cleartext HTTP strictly to `127.0.0.1` and `localhost`, and tightened `WebView` file-access and mixed-content policies.
+- **Browser Update Handoff:** DeckVault checks GitHub Releases on launch and in **Settings** and opens direct APK downloads cleanly in your browser.
