@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeckVault</string>
+    <string name="subtitle_tagline">Offline Web Deck Saver &amp; Launcher</string>
+    <string name="add_deck">Save Web Deck</string>
+    <string name="empty_title">No offline decks yet</string>
+    <string name="empty_subtitle">Tap &quot;Save Web Deck&quot; or share a link from Chrome to download an interactive deck for 100% offline use.</string>
+    <string name="dialog_add_title">Save Website Offline</string>
+    <string name="hint_url">Web deck URL (https://...)</string>
+    <string name="hint_name">Deck name (optional)</string>
+    <string name="option_external_media">Download linked PDFs &amp; external videos</string>
+    <string name="btn_save_offline">Save Offline</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_open">Open</string>
+    <string name="btn_pin">Pin</string>
+    <string name="btn_more">More</string>
+    <string name="btn_storage_info">Storage Info</string>
+    <string name="btn_optimize">Optimize / Compress…</string>
+    <string name="btn_share">Share (Quick Share / ZIP)</string>
+    <string name="btn_import">Import</string>
+    <string name="btn_settings">Settings</string>
+    <string name="btn_rename">Rename</string>
+    <string name="btn_update">Re-sync</string>
+    <string name="btn_delete">Delete</string>
+    <string name="menu_back">Library</string>
+    <string name="menu_reload">Reload</string>
+    <string name="menu_catchup_off">Catch-Up: OFF (Pure Offline)</string>
+    <string name="menu_catchup_on">Catch-Up: ON (Auto-fill missing)</string>
+    <string name="menu_pin_shortcut">Pin to Home Screen</string>
+    <string name="menu_open_browser">Open in Browser</string>
+    <string name="menu_debug_log">View Debug Log</string>
+    <string name="pdf_viewer_title">Offline Document</string>
+    <string name="debug_log_title">Debug Log</string>
+    <string name="settings_title">Settings &amp; About</string>
+    <string name="section_compression">Storage &amp; Compression</string>
+    <string name="section_updates">App Updates (GitHub Releases)</string>
+    <string name="section_about">About DeckVault</string>
+    <string name="pref_check_launch">Check for updates on app launch</string>
+    <string name="pref_check_boot">Check for updates on device boot</string>
+    <string name="pref_include_prerelease">Enable Beta / Pre-release updates</string>
+    <string name="btn_check_updates">Check for Updates Now</string>
+    <string name="btn_open_releases">View All Releases on GitHub</string>
+    <string name="btn_optimize_all">Optimize Existing Decks…</string>
+    <string name="btn_open_github">Open GitHub Repository</string>
+    <string name="btn_view_debug_log">View Debug Log</string>
+    <string name="about_description">Native offline saver, media optimizer, local HTTP server, and shortcut launcher for interactive HTML5 web decks.</string>
+</resources>
