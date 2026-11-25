@@ -24,13 +24,11 @@ import com.deckvault.offline.util.GitHubReleaseInfo
 import com.deckvault.offline.util.UpdateCheckResult
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
-import java.io.File
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var repo: DeckRepository
-    private var downloadedApkReady: File? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,15 +54,11 @@ class SettingsActivity : AppCompatActivity() {
         // Update preferences
         val isBetaBuild = AppUpdateManager.isCurrentBuildPreRelease()
         binding.switchCheckLaunch.isChecked = AppUpdatePrefs.isCheckOnLaunchEnabled(this)
-        binding.switchCheckBoot.isChecked = AppUpdatePrefs.isCheckOnBootEnabled(this)
         binding.switchIncludePrerelease.isChecked = AppUpdatePrefs.isIncludePreReleases(this)
         updateChannelBadge(isBetaBuild, binding.switchIncludePrerelease.isChecked)
 
         binding.switchCheckLaunch.setOnCheckedChangeListener { _, checked ->
             AppUpdatePrefs.setCheckOnLaunchEnabled(this, checked)
-        }
-        binding.switchCheckBoot.setOnCheckedChangeListener { _, checked ->
-            AppUpdatePrefs.setCheckOnBootEnabled(this, checked)
         }
         binding.switchIncludePrerelease.setOnCheckedChangeListener { _, checked ->
             AppUpdatePrefs.setIncludePreReleases(this, checked)
@@ -84,10 +78,6 @@ class SettingsActivity : AppCompatActivity() {
         binding.tvAboutRepoUrl.setOnClickListener { openUrl(AppUpdateManager.GITHUB_REPO_URL) }
         binding.btnViewDebugLog.setOnClickListener {
             startActivity(Intent(this, DebugLogActivity::class.java))
-        }
-
-        if (intent.getBooleanExtra(EXTRA_AUTO_CHECK, false)) {
-            runManualUpdateCheck()
         }
     }
 
@@ -161,15 +151,6 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
-    override fun onResume() {
-        super.onResume()
-        val pendingApk = downloadedApkReady
-        if (pendingApk != null && pendingApk.exists() && packageManager.canRequestPackageInstalls()) {
-            downloadedApkReady = null
-            AppUpdateManager.launchApkInstaller(this, pendingApk)
-        }
-    }
-
     private fun runManualUpdateCheck() {
         binding.btnCheckUpdates.isEnabled = false
         binding.updateProgressBar.visibility = View.VISIBLE
@@ -217,69 +198,19 @@ class SettingsActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Update Available")
             .setMessage(message)
-            .setPositiveButton("Download & Install") { _, _ ->
-                downloadAndInstall(release)
+            .setPositiveButton("Download in Browser") { _, _ ->
+                AppUpdateManager.openReleaseDownloadInBrowser(this, release)
             }
-            .setNeutralButton("Open Release") { _, _ ->
+            .setNeutralButton("Release Page") { _, _ ->
                 openUrl(release.htmlUrl)
             }
             .setNegativeButton("Later", null)
             .show()
     }
 
-    private fun downloadAndInstall(release: GitHubReleaseInfo) {
-        binding.btnCheckUpdates.isEnabled = false
-        binding.updateProgressBar.visibility = View.VISIBLE
-        binding.updateProgressBar.isIndeterminate = false
-        binding.updateProgressBar.max = 100
-        binding.updateProgressBar.progress = 0
-        binding.tvUpdateStatus.text = "Downloading ${release.apkName}..."
-
-        lifecycleScope.launch {
-            try {
-                val apkFile = AppUpdateManager.downloadAndVerifyApk(
-                    context = this@SettingsActivity,
-                    release = release
-                ) { downloaded, total ->
-                    runOnUiThread {
-                        if (total > 0L) {
-                            val pct = ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
-                            binding.updateProgressBar.isIndeterminate = false
-                            binding.updateProgressBar.progress = pct
-                            binding.tvUpdateStatus.text =
-                                "Downloading ${release.tagName}: $pct% (${DeckRepository.formatBytes(downloaded)} / ${DeckRepository.formatBytes(total)})"
-                        } else {
-                            binding.updateProgressBar.isIndeterminate = true
-                            binding.tvUpdateStatus.text =
-                                "Downloading ${release.tagName}: ${DeckRepository.formatBytes(downloaded)}..."
-                        }
-                    }
-                }
-
-                binding.btnCheckUpdates.isEnabled = true
-                binding.updateProgressBar.visibility = View.GONE
-                binding.tvUpdateStatus.text = "Verified ${release.apkName}. Ready to install."
-
-                if (!packageManager.canRequestPackageInstalls()) {
-                    downloadedApkReady = apkFile
-                }
-                AppUpdateManager.launchApkInstaller(this@SettingsActivity, apkFile)
-            } catch (e: Exception) {
-                binding.btnCheckUpdates.isEnabled = true
-                binding.updateProgressBar.visibility = View.GONE
-                binding.tvUpdateStatus.text = "Download failed: ${e.message}"
-                Toast.makeText(this@SettingsActivity, "Update failed: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
     private fun openUrl(url: String) {
         runCatching {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }
-    }
-
-    companion object {
-        const val EXTRA_AUTO_CHECK = "extra_auto_check"
     }
 }

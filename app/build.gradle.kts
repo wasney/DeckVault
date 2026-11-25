@@ -11,8 +11,8 @@ android {
         applicationId = "com.deckvault.offline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.1.0"
+        versionCode = 10
+        versionName = "1.1.1-beta.1"
     }
 
     signingConfigs {
@@ -22,6 +22,14 @@ android {
             keyAlias = "deckvault"
             keyPassword = "deckvault123"
         }
+        create("release") {
+            storeFile = file("deckvault.jks")
+            storePassword = "deckvault123"
+            keyAlias = "deckvault"
+            keyPassword = "deckvault123"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
     }
 
     buildTypes {
@@ -30,7 +38,8 @@ android {
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

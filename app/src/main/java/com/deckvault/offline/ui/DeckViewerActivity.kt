@@ -144,7 +144,7 @@ class DeckViewerActivity : AppCompatActivity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.databaseEnabled = true
-        settings.allowFileAccess = true
+        settings.allowFileAccess = false
         settings.allowContentAccess = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.useWideViewPort = true
@@ -153,7 +153,7 @@ class DeckViewerActivity : AppCompatActivity() {
         settings.displayZoomControls = false
         settings.setSupportMultipleWindows(true)
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

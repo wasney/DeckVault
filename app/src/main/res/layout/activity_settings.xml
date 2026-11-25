@@ -160,15 +160,6 @@
                         android:textSize="15sp" />
 
                     <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switch_check_boot"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="@string/pref_check_boot"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp" />
-
-                    <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_include_prerelease"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

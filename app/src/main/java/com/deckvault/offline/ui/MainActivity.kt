@@ -57,7 +57,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: DeckAdapter
     private var currentQueuedCount: Int = 0
     private var isOptimizingNow: Boolean = false
-    private var pendingUpdateApk: File? = null
 
     private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -128,55 +127,17 @@ class MainActivity : AppCompatActivity() {
         val betaBadge = if (release.isPreRelease) " [Beta]" else ""
         MaterialAlertDialogBuilder(this)
             .setTitle("DeckVault Update ${release.tagName}$betaBadge")
-            .setMessage("A newer version$sizeStr is available on GitHub.\n\n${release.notes}")
-            .setPositiveButton("Download & Install") { _, _ ->
-                downloadAndInstallUpdate(release)
+            .setMessage("A newer version$sizeStr is available on GitHub.
+
+${release.notes}")
+            .setPositiveButton("Download in Browser") { _, _ ->
+                AppUpdateManager.openReleaseDownloadInBrowser(this, release)
             }
             .setNeutralButton("Settings") { _, _ ->
                 startActivity(Intent(this, SettingsActivity::class.java))
             }
             .setNegativeButton("Later", null)
             .show()
-    }
-
-    private fun downloadAndInstallUpdate(release: GitHubReleaseInfo) {
-        binding.cardProgress.visibility = View.VISIBLE
-        binding.btnCancelDownload.visibility = View.GONE
-        binding.tvProgressTitle.text = "Updating to ${release.tagName}..."
-        binding.tvProgressDetail.text = "Downloading ${release.apkName}..."
-        binding.progressBar.isIndeterminate = false
-        binding.progressBar.max = 100
-        binding.progressBar.progress = 0
-
-        lifecycleScope.launch {
-            try {
-                val apkFile = AppUpdateManager.downloadAndVerifyApk(
-                    context = this@MainActivity,
-                    release = release
-                ) { downloaded, total ->
-                    runOnUiThread {
-                        if (total > 0L) {
-                            val pct = ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
-                            binding.progressBar.isIndeterminate = false
-                            binding.progressBar.progress = pct
-                            binding.tvProgressDetail.text =
-                                "$pct% • ${DeckRepository.formatBytes(downloaded)} / ${DeckRepository.formatBytes(total)}"
-                        } else {
-                            binding.progressBar.isIndeterminate = true
-                            binding.tvProgressDetail.text = "Downloaded ${DeckRepository.formatBytes(downloaded)}..."
-                        }
-                    }
-                }
-                binding.cardProgress.visibility = View.GONE
-                if (!packageManager.canRequestPackageInstalls()) {
-                    pendingUpdateApk = apkFile
-                }
-                AppUpdateManager.launchApkInstaller(this@MainActivity, apkFile)
-            } catch (e: Exception) {
-                binding.cardProgress.visibility = View.GONE
-                Toast.makeText(this@MainActivity, "Update failed: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
     }
 
     private fun handleCancelClick() {
@@ -231,11 +192,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshList()
-        val pending = pendingUpdateApk
-        if (pending != null && pending.exists() && packageManager.canRequestPackageInstalls()) {
-            pendingUpdateApk = null
-            AppUpdateManager.launchApkInstaller(this, pending)
-        }
     }
 
     private fun handleIncomingShare(intent: Intent?) {

@@ -36,7 +36,6 @@
     <string name="section_updates">App Updates (GitHub Releases)</string>
     <string name="section_about">About DeckVault</string>
     <string name="pref_check_launch">Check for updates on app launch</string>
-    <string name="pref_check_boot">Check for updates on device boot</string>
     <string name="pref_include_prerelease">Enable Beta / Pre-release updates</string>
     <string name="btn_check_updates">Check for Updates Now</string>
     <string name="btn_open_releases">View All Releases on GitHub</string>

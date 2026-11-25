@@ -48,5 +48,5 @@ Each deck remains 100% self-contained in its own folder (no fragile cross-deck d
 ## Installation
 
 1. Open the **[Releases](https://github.com/wasney/DeckVault/releases)** page on your Android phone or tablet.
-2. Download the latest official `DeckVault-vX.Y.Z-debug.apk` (or opt into Beta builds inside **Settings** after installing).
+2. Download the latest official `DeckVault-vX.Y.Z-release.apk` (or opt into Beta builds inside **Settings** after installing).
 3. Tap the APK to install (allow **Install unknown apps** when prompted).
