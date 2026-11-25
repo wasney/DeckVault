@@ -1,0 +1,190 @@
+name: Build & Release DeckVault APK
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Locate or unpack Android project
+        id: locate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED_ZIPS=$(git diff-tree --no-commit-id --name-only -r --root --diff-filter=AM "${{ github.sha }}" | grep -iE '\.zip$' || true)
+            if [ -z "$CHANGED_ZIPS" ]; then
+              echo "No added or modified .zip files in this commit (likely a .zip deletion). Skipping APK build."
+              echo "should_build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Detected added/modified .zip file(s):"
+            echo "$CHANGED_ZIPS"
+          fi
+
+          LATEST_ZIP=$(python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+
+          zips = []
+          for p in Path('.').rglob('*.zip'):
+              parts = p.parts
+              if '.git' in parts or len(parts) > 2:
+                  continue
+              m = re.search(r'v?(\d+(?:\.\d+)+)(?:-([0-9A-Za-z.-]+))?', p.stem)
+              if not m:
+                  key = ((0,), 0, ())
+              else:
+                  nums = tuple(int(x) for x in m.group(1).split('.'))
+                  pre = m.group(2)
+                  if pre is None:
+                      key = (nums, 1, ())
+                  else:
+                      pre_parts = tuple(
+                          (0, int(tok)) if tok.isdigit() else (1, tok.lower())
+                          for tok in re.split(r'[.-]', pre)
+                      )
+                      key = (nums, 0, pre_parts)
+              zips.append((key, p.as_posix()))
+
+          if zips:
+              zips.sort(key=lambda item: item[0])
+              print(zips[-1][1])
+          PY
+          )
+
+          if [ -z "$LATEST_ZIP" ]; then
+            echo "::error::No .zip archive found in repository root or uploads/."
+            ls -la
+            exit 1
+          fi
+
+          echo "Unpacking latest ZIP archive (SemVer): $LATEST_ZIP"
+          rm -rf _build_src
+          mkdir -p _build_src
+          unzip -oq "$LATEST_ZIP" -d _build_src
+          SETTINGS_FILE=$(find _build_src -maxdepth 4 -type f \( -name 'settings.gradle.kts' -o -name 'settings.gradle' \) | head -n 1)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "::error::Could not find settings.gradle.kts inside $LATEST_ZIP."
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          if [ -f "./deckvault.jks" ]; then
+            echo "Using persistent repo-root deckvault.jks"
+            cp "./deckvault.jks" "$PROJECT_DIR/app/deckvault.jks"
+          fi
+
+          VERSION_NAME=$(grep -Eo 'versionName[[:space:]]*=[[:space:]]*"[^"]+"' "$PROJECT_DIR/app/build.gradle.kts" | head -n 1 | cut -d'"' -f2)
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="unknown"
+          fi
+
+          echo "Using Gradle project root: $PROJECT_DIR (version: $VERSION_NAME)"
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        if: steps.locate.outputs.should_build == 'true'
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        if: steps.locate.outputs.should_build == 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Debug APK
+        if: steps.locate.outputs.should_build == 'true'
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Generate APK SHA-256 Checksum
+        id: pkg
+        if: steps.locate.outputs.should_build == 'true'
+        shell: bash
+        run: |
+          APK_DIR="${{ steps.locate.outputs.project_dir }}/app/build/outputs/apk/debug"
+          APK_FILE=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::No APK found in $APK_DIR"
+            exit 1
+          fi
+          (cd "$APK_DIR" && sha256sum "$(basename "$APK_FILE")" > "$(basename "$APK_FILE").sha256")
+          echo "apk_path=$APK_FILE" >> "$GITHUB_OUTPUT"
+          echo "sha_path=${APK_FILE}.sha256" >> "$GITHUB_OUTPUT"
+          cat "${APK_FILE}.sha256"
+
+      - name: Upload APK artifact
+        if: steps.locate.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeckVault-v${{ steps.locate.outputs.version_name }}-apk
+          path: |
+            ${{ steps.pkg.outputs.apk_path }}
+            ${{ steps.pkg.outputs.sha_path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: steps.locate.outputs.should_build == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.locate.outputs.version_name }}"
+          TAG="v${VERSION}"
+          PROJECT_DIR="${{ steps.locate.outputs.project_dir }}"
+          APK_PATH="${{ steps.pkg.outputs.apk_path }}"
+          SHA_PATH="${{ steps.pkg.outputs.sha_path }}"
+
+          NOTES_FILE="$PROJECT_DIR/RELEASE_NOTES.md"
+          if [ ! -f "$NOTES_FILE" ]; then
+            NOTES_FILE="_generated_notes.md"
+            printf "### DeckVault %s\n\nAutomated APK build for version %s.\n" "$TAG" "$VERSION" > "$NOTES_FILE"
+          fi
+
+          IS_PRE=false
+          if echo "$VERSION" | grep -qiE '(-pre|-alpha|-beta|-rc)'; then
+            IS_PRE=true
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Updating existing release $TAG (prerelease=$IS_PRE)..."
+            if [ "$IS_PRE" = true ]; then
+              gh release edit "$TAG" --title "DeckVault $TAG (Beta)" --notes-file "$NOTES_FILE" --prerelease
+            else
+              gh release edit "$TAG" --title "DeckVault $TAG" --notes-file "$NOTES_FILE" --prerelease=false
+            fi
+            gh release upload "$TAG" "$APK_PATH" "$SHA_PATH" --clobber
+          else
+            echo "Creating new release $TAG (prerelease=$IS_PRE)..."
+            if [ "$IS_PRE" = true ]; then
+              gh release create "$TAG" "$APK_PATH" "$SHA_PATH" \
+                --title "DeckVault $TAG (Beta)" \
+                --notes-file "$NOTES_FILE" \
+                --prerelease
+            else
+              gh release create "$TAG" "$APK_PATH" "$SHA_PATH" \
+                --title "DeckVault $TAG" \
+                --notes-file "$NOTES_FILE"
+            fi
+          fi
