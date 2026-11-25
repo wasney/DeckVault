@@ -132,7 +132,7 @@ jobs:
             VERSION_NAME="unknown"
           fi
 
-          echo "Ready to build version: $VERSION_NAME"
+          echo "Ready to build Release APK for version: $VERSION_NAME"
           echo "should_build=true" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
@@ -149,16 +149,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build Debug APK
+      - name: Build Signed Release APK
         if: steps.unpack.outputs.should_build == 'true'
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Generate APK SHA-256 Checksum
         id: pkg
         if: steps.unpack.outputs.should_build == 'true'
         shell: bash
         run: |
-          APK_DIR="app/build/outputs/apk/debug"
+          APK_DIR="app/build/outputs/apk/release"
           APK_FILE=$(find "$APK_DIR" -maxdepth 1 -type f -name '*.apk' | head -n 1)
           if [ -z "$APK_FILE" ]; then
             echo "::error::No APK found in $APK_DIR"
