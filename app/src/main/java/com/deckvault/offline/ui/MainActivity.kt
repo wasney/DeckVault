@@ -127,9 +127,7 @@ class MainActivity : AppCompatActivity() {
         val betaBadge = if (release.isPreRelease) " [Beta]" else ""
         MaterialAlertDialogBuilder(this)
             .setTitle("DeckVault Update ${release.tagName}$betaBadge")
-            .setMessage("A newer version$sizeStr is available on GitHub.
-
-${release.notes}")
+            .setMessage("A newer version$sizeStr is available on GitHub.\n\n${release.notes}")
             .setPositiveButton("Download in Browser") { _, _ ->
                 AppUpdateManager.openReleaseDownloadInBrowser(this, release)
             }
